@@ -1,32 +1,31 @@
 """
-File utilities for MCT.
+File I/O and directory monitoring utility functions for MCT system.
 """
 import os
 import json
 import time
-import threading
 
 
 def load_json_file(file_path):
-    """Load JSON file, return empty dict if not exists or error"""
+    """Load JSON file, return empty dict if not exists or error."""
     if not os.path.exists(file_path):
         return {}
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             return json.load(f)
-    except:
+    except Exception:
         return {}
 
 
 def save_json_file(file_path, data):
-    """Save data to JSON file"""
+    """Save data to JSON file."""
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     with open(file_path, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
 
 
 def count_directories_and_files(directory):
-    """Count number of directories and files in a directory"""
+    """Count number of directories and files in a directory."""
     if not os.path.exists(directory):
         return 0, 0
     
@@ -37,11 +36,10 @@ def count_directories_and_files(directory):
         item_path = os.path.join(directory, item)
         if os.path.isdir(item_path):
             folder_count += 1
-            # Count files in subdirectory
             try:
                 file_count += len([f for f in os.listdir(item_path) 
                                  if os.path.isfile(os.path.join(item_path, f))])
-            except:
+            except Exception:
                 pass
         elif os.path.isfile(item_path):
             file_count += 1
@@ -77,10 +75,8 @@ def monitor_face_directory(faces_dir, update_queue, check_interval=10):
                 print(f"   Current:  {current_folders} folders, {current_files} files")
                 print(f"{'='*60}")
                 
-                # Signal update needed
                 update_queue.put('reload_faces')
                 
-                # Update tracking state
                 initial_folders, initial_files = current_folders, current_files
                 
         except Exception as e:

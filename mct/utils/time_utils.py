@@ -1,13 +1,10 @@
 """
-Time utilities for MCT.
+Time utility functions for MCT system.
 """
 from datetime import datetime, timezone, timedelta
 
 
-# Vietnam timezone
-VN_TZ = timezone(timedelta(hours=7))
-
-
 def get_vn_time():
-    """Get current time in Vietnam timezone"""
-    return datetime.now(VN_TZ)
+    """Get current time in Vietnam timezone (UTC+7)."""
+    vn_tz = timezone(timedelta(hours=7))
+    return datetime.now(vn_tz)

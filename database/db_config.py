@@ -48,8 +48,8 @@ class CameraConfig:
     
     @property
     def cam_id_str(self) -> str:
-        """Generate camera ID string for internal use"""
-        return f"cam{self.camera_id}"
+        """Generate camera ID string for internal use (uses IP for easy mapping)"""
+        return self.ip
 
 
 @dataclass
@@ -83,7 +83,7 @@ class DatabaseConfig:
     """Database connection configuration"""
     
     # Default connection parameters (can be overridden by environment variables)
-    DEFAULT_HOST = "192.168.210.250"
+    DEFAULT_HOST = "10.29.8.49"
     DEFAULT_PORT = 5432
     DEFAULT_USER = "infiniq_user"
     DEFAULT_PASSWORD = "infiniq_pass"
@@ -445,24 +445,26 @@ def load_all_config(floor_filter: Optional[List[str]] = None) -> Dict[str, Any]:
 
 def generate_active_cameras_list(cameras: List[CameraConfig]) -> List[dict]:
     """
-    Generate active_cameras list compatible with demo_mct.py format.
+    Generate active_cameras list compatible with MCT system format.
+    
+    Camera ID uses IP address for easy mapping to calibration folders.
     
     Returns:
         List of dicts with format:
-        {'id': 'cam45', 'url': 'rtsp://...', 'floor': 3, 'map_id': 'cam1'}
+        {'id': '10.29.98.52', 'url': 'rtsp://...', 'floor': 3, ...}
     """
     active_cameras = []
     
     for cam in cameras:
         active_cameras.append({
-            'id': cam.cam_id_str,
+            'id': cam.cam_id_str,   # IP address (e.g., '10.29.98.52')
             'url': cam.rtsp_url,
             'floor': cam.floor_num,
             'floor_name': cam.floor,
             'name': cam.name,
             'inout': cam.inout,
             'region_id': cam.region_id,
-            'ip': cam.ip  # Camera IP for calibration folder name
+            'ip': cam.ip
         })
     
     return active_cameras

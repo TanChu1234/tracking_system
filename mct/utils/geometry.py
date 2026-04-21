@@ -1,18 +1,12 @@
 """
-Geometry utilities for MCT.
+Geometry utility functions for MCT system.
 """
 
 
 def compute_iou(box1, box2):
     """
-    Compute Intersection over Union between two boxes.
-    
-    Args:
-        box1: [x1, y1, x2, y2]
-        box2: [x1, y1, x2, y2]
-    
-    Returns:
-        float: IoU value
+    Compute Intersection over Union (IoU) between two bounding boxes.
+    box format: (x1, y1, x2, y2)
     """
     x1 = max(box1[0], box2[0])
     y1 = max(box1[1], box2[1])
@@ -31,7 +25,7 @@ def compute_iou(box1, box2):
 
 def is_face_inside_body(face_box, body_box):
     """
-    Check if face is essentially inside the body box (focused on top half)
+    Check if face center is inside the body bounding box.
     
     Args:
         face_box: [x1, y1, x2, y2]
@@ -45,7 +39,6 @@ def is_face_inside_body(face_box, body_box):
     
     bx1, by1, bx2, by2 = body_box
     
-    # Check center containment
     if bx1 < fx_center < bx2 and by1 < fy_center < by2:
         return True
     return False

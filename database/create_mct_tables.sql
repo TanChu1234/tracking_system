@@ -94,6 +94,42 @@ CREATE INDEX IF NOT EXISTS idx_mct_pos_session ON mct_position_tracking(session_
 -- Composite index for daily movement queries
 CREATE INDEX IF NOT EXISTS idx_mct_pos_usr_date ON mct_position_tracking(usr_id, tracked_at);
 
+-- -----------------------------------------------------------------------------
+-- Table 4: mct_desk_presence - Tracks if employees are at their assigned desk
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS mct_desk_presence (
+    id SERIAL PRIMARY KEY,
+
+    -- Session Info
+    session_id VARCHAR(50) NOT NULL,
+
+    -- ROI (Desk) Info
+    roi_id INTEGER NOT NULL,                 -- ROI ID from rois table
+    roi_owner VARCHAR(50) NOT NULL,          -- Employee ID assigned to this desk (ROI name)
+
+    -- Location
+    floor VARCHAR(10) NOT NULL,
+
+    -- Presence
+    is_present BOOLEAN NOT NULL DEFAULT FALSE,  -- true = someone at desk, false = empty
+
+    -- Time
+    checked_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh'),
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')
+);
+
+-- Indexes for fast querying
+CREATE INDEX IF NOT EXISTS idx_mct_desk_roi_owner ON mct_desk_presence(roi_owner);
+CREATE INDEX IF NOT EXISTS idx_mct_desk_checked_at ON mct_desk_presence(checked_at);
+CREATE INDEX IF NOT EXISTS idx_mct_desk_session ON mct_desk_presence(session_id);
+CREATE INDEX IF NOT EXISTS idx_mct_desk_floor ON mct_desk_presence(floor);
+CREATE INDEX IF NOT EXISTS idx_mct_desk_roi_id ON mct_desk_presence(roi_id);
+
+-- Composite index for desk presence queries by owner and time
+CREATE INDEX IF NOT EXISTS idx_mct_desk_owner_date ON mct_desk_presence(roi_owner, checked_at);
+
 -- =============================================================================
 -- Sample Queries for Reference
 -- =============================================================================

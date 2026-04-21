@@ -1,23 +1,15 @@
 """
-Person tracking classes for MCT.
+Track data classes for MCT system.
+PendingTrack: tracks waiting for confirmation (accumulating features).
+ConfirmedTrack: confirmed tracks with temporal ID voting.
 """
 from collections import deque
 
 
 class PendingTrack:
-    """
-    Represents a track that is pending confirmation.
-    Accumulates features until confirmed.
-    """
+    """A detection that needs N consecutive frames before being assigned an ID."""
     
     def __init__(self, box, feat):
-        """
-        Initialize pending track.
-        
-        Args:
-            box: Bounding box [x1, y1, x2, y2]
-            feat: Feature vector
-        """
         self.box = box
         self.feat = feat
         self.count = 1
@@ -26,36 +18,31 @@ class PendingTrack:
 
 class ConfirmedTrack:
     """
-    Represents a confirmed track with stable ID.
-    Uses voting mechanism for ID stability.
+    A confirmed track with a stable person ID.
+    Uses temporal voting to prevent ID flickering.
     """
     
     def __init__(self, person_id, box, feat):
-        """
-        Initialize confirmed track.
-        
-        Args:
-            person_id: Stable person ID
-            box: Bounding box [x1, y1, x2, y2]
-            feat: Feature vector
-        """
-        self.person_id = person_id      # The stable, confirmed ID
+        self.person_id = person_id
         self.box = box
         self.feat = feat
         self.miss_count = 0
-        self.vote_history = deque(maxlen=10)  # Store last 10 raw ReID results
+        self.vote_history = deque(maxlen=15)
         self.vote_history.append(person_id)
-        self.display_id = person_id     # ID currently displayed
-        self.consecutive_matches = 0    # Track how stable the current raw vote is
+        self.display_id = person_id
+        self.consecutive_matches = 0
+        # Runtime attributes set during processing
+        self.current_sim_score = 0.0
+        self.current_is_sharp = False
 
     def update(self, box, feat, raw_voting_id):
         """
-        Update track with new detection.
+        Update track with new detection and perform temporal ID voting.
         
         Args:
             box: New bounding box
             feat: New feature vector
-            raw_voting_id: Raw ReID result for this frame
+            raw_voting_id: The ID suggested by ReID search this frame
         """
         self.box = box
         self.feat = feat
@@ -63,7 +50,6 @@ class ConfirmedTrack:
         self.vote_history.append(raw_voting_id)
         
         # Temporal Consistency Logic
-        # Calculate most frequent ID in history
         if len(self.vote_history) > 0:
             counts = {}
             for vid in self.vote_history:
@@ -72,10 +58,7 @@ class ConfirmedTrack:
             # Find winner
             best_id, count = sorted(counts.items(), key=lambda x: x[1], reverse=True)[0]
             
-            # Logic: Only switch ID if the new ID is dominant in recent history
-            # If current display_id is still in history with decent support, keep it
-            # to prevent flickering.
-            
+            # Only switch ID if the new ID is dominant in recent history
             HISTORY_LEN = len(self.vote_history)
             THRESHOLD = max(3, HISTORY_LEN // 2 + 1)  # Majority vote
             

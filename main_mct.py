@@ -2,7 +2,7 @@
 """
 Multi-Camera Tracking (MCT) System - Main Entry Point
 
-This is the refactored entry point for the MCT system.
+This is the primary entry point for the MCT system.
 It uses modular components from the mct package.
 
 Usage:
@@ -15,7 +15,6 @@ Usage:
     # Use manual RTSP URLs (legacy mode):
     python main_mct.py --rtsp1 "rtsp://..." --rtsp2 "rtsp://..."
 """
-
 import os
 import sys
 import argparse
@@ -24,50 +23,16 @@ import argparse
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 import torch
-# Demo Mode: Speed over Reproducibility
 torch.backends.cudnn.benchmark = True
 torch.backends.cudnn.deterministic = False
 
 # Add paths
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'image2map'))
-
-# Import MCT modules (new modular structure)
-from mct.core.stream import ThreadedStream
-from mct.core.tracker import PendingTrack, ConfirmedTrack
-from mct.face.detector import setup_face_api, run_face_recognition
-from mct.face.indexer import rebuild_face_index
-from mct.reid.model import setup_transreid, get_transforms
-from mct.reid.features import extract_feature, extract_features_batch
-from mct.utils.time_utils import get_vn_time
-from mct.utils.file_utils import load_json_file, save_json_file, monitor_face_directory
-from mct.utils.geometry import compute_iou, is_face_inside_body
-from mct.utils.logging_utils import get_floor_logger, log_face_detection, remove_expired_names
-
-# Other imports
-import api_server
-from map import Map
-from config import cfg
-
-# Database imports
-try:
-    from database.db_config import load_all_config, generate_active_cameras_list
-    DB_CONFIG_AVAILABLE = True
-    print("✅ Database config module available")
-except ImportError:
-    DB_CONFIG_AVAILABLE = False
-    print("⚠️ Database config module not available")
-
-try:
-    from database.mct_tracking import get_mct_tracker
-    MCT_TRACKING_AVAILABLE = True
-    print("✅ MCT Tracking module available")
-except ImportError as e:
-    MCT_TRACKING_AVAILABLE = False
-    print(f"⚠️ MCT Tracking module not available: {e}")
+sys.path.append(os.path.join(os.getcwd(), 'API_Face'))
 
 
 def main():
-    """Main entry point - delegates to demo_mct.run_demo for now."""
+    """Main entry point."""
     parser = argparse.ArgumentParser(
         description="Multi-Camera Tracking System with Face + Body ReID",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -126,24 +91,27 @@ Examples:
     if args.db_name:
         os.environ['DB_NAME'] = args.db_name
     
-    # Import and run the main demo logic
-    # (For now, we still use demo_mct.run_demo as the core processing loop is complex)
+    # Run
     print("="*60)
-    print("🚀 MCT System - Modular Architecture")
+    print("🚀 MCT System - Multi-Floor Architecture (F1-F7)")
     print("="*60)
-    print("ℹ️  Using new modular structure from mct/ package")
-    print("ℹ️  Components loaded:")
-    print("   - mct.core.stream: ThreadedStream")
-    print("   - mct.core.tracker: PendingTrack, ConfirmedTrack")
-    print("   - mct.face.detector: setup_face_api, run_face_recognition")
-    print("   - mct.face.indexer: rebuild_face_index")
-    print("   - mct.reid.model: setup_transreid, get_transforms")
-    print("   - mct.reid.features: extract_feature, extract_features_batch")
-    print("   - mct.utils.*: Various utilities")
+    print("ℹ️  Features:")
+    print("   - 7 Floors Support (F1-F7) with dynamic mapper initialization")
+    print("   - REST API for floor/camera enable/disable management")
+    print("   - WebSocket broadcast per floor")
+    print("   - Face Recognition + Body ReID")
+    print("   - MCT Database Logging")
+    print("")
+    print("📡 API Endpoints (after startup):")
+    print("   GET  /api/status                    - System status")
+    print("   POST /api/floors/{id}/enable         - Enable floor")
+    print("   POST /api/floors/{id}/disable        - Disable floor")
+    print("   POST /api/cameras/{id}/enable        - Enable camera")
+    print("   POST /api/cameras/{id}/disable       - Disable camera")
     print("="*60)
     
-    # For backward compatibility, import and run demo_mct.run_demo
-    from demo_mct import run_demo
+    # Import and run engine
+    from mct.core.engine import run_demo
     run_demo(args)
 
 

@@ -1,22 +1,22 @@
 """
-Feature extraction functions for ReID.
+ReID feature extraction utilities.
 """
-import torch
 import numpy as np
+import torch
 
 
 def extract_feature(model, img, transform, device):
     """
-    Extract feature from a single image.
+    Extract feature vector for a single PIL image.
     
     Args:
-        model: ReID model
+        model: TransReID model
         img: PIL Image
         transform: Image transform
-        device: Device ('cuda' or 'cpu')
+        device: torch device
     
     Returns:
-        numpy array: Feature vector
+        numpy array of shape [1, feat_dim]
     """
     img = transform(img)
     img = img.unsqueeze(0).to(device)
@@ -38,12 +38,11 @@ def extract_features_batch(model, imgs, transform, device):
         device: GPU device
     
     Returns:
-        numpy array: Features [N, feat_dim]
+        numpy array of features [N, feat_dim]
     """
     if len(imgs) == 0:
         return np.array([])
     
-    # Transform all images
     batch = torch.stack([transform(img) for img in imgs]).to(device)
     cam_labels = torch.zeros(len(imgs), dtype=torch.long, device=device)
     

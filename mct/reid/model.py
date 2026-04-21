@@ -1,26 +1,26 @@
 """
-TransReID model setup and configuration.
+TransReID model setup and transform utilities.
 """
 import os
 import torch
 import torchvision.transforms as T
 
+from config import cfg
+from model import make_model
+
 
 def setup_transreid(config_file, weights_path, device='cuda'):
     """
-    Initialize TransReID model with weights.
+    Initialize TransReID model for person re-identification.
     
     Args:
-        config_file: Path to config YAML file
-        weights_path: Path to model weights
-        device: Device to run model on ('cuda' or 'cpu')
+        config_file: Path to TransReID YAML config
+        weights_path: Path to trained weights
+        device: 'cuda' or 'cpu'
     
     Returns:
-        model: Loaded TransReID model in eval mode
+        model: TransReID model in eval mode
     """
-    from config import cfg
-    from model import make_model
-    
     if config_file != "":
         cfg.merge_from_file(config_file)
     
@@ -49,19 +49,14 @@ def setup_transreid(config_file, weights_path, device='cuda'):
     return model
 
 
-def get_transforms(cfg=None):
+def get_transforms():
     """
-    Get image transforms for ReID model.
-    
-    Args:
-        cfg: Config object (will import if None)
+    Get image transforms for TransReID inference.
+    Uses cfg.INPUT settings.
     
     Returns:
-        torchvision.transforms.Compose: Transform pipeline
+        torchvision.transforms.Compose
     """
-    if cfg is None:
-        from config import cfg
-    
     transform = T.Compose([
         T.Resize(cfg.INPUT.SIZE_TEST),
         T.ToTensor(),

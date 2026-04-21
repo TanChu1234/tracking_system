@@ -1,0 +1,64 @@
+# ============================================================
+# MCT System — Docker Compose
+#
+# Prerequisites:
+#   - NVIDIA Driver ≥ 520 on host
+#   - nvidia-container-toolkit installed
+#   - Docker Engine ≥ 19.03
+#
+# Usage:
+#   docker compose up -d          # Start
+#   docker compose logs -f mct    # Follow logs
+#   docker compose down           # Stop
+# ============================================================
+
+services:
+  mct:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mct-system:latest
+    container_name: mct-system
+    restart: unless-stopped
+
+    # ── GPU access ──
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['1']
+              capabilities: [gpu, compute, utility]
+
+    environment:
+      # GPU
+      - NVIDIA_VISIBLE_DEVICES=1
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+      # Database
+      - DB_HOST=10.29.8.49
+      - DB_PORT=5432
+      - DB_USER=infiniq_user
+      - DB_PASSWORD=infiniq_pass
+      - DB_NAME=camera_ai_db
+
+    ports:
+      - "8068:8068"          # FastAPI / WebSocket
+
+    volumes:
+      # Persist logs on host
+      - ./logs:/app/logs
+      # Optional: mount weights from host instead of baking into image
+      # (uncomment to reduce image size — weights stay on host disk)
+      # - ./weights:/app/weights:ro
+      # - ./API_Face/weights:/app/API_Face/weights:ro
+      - ./yolo26s_person_train16_v3.pt:/app/yolo26s_person_train16_v3.pt:ro
+
+    # Give models enough time to load onto GPU before health-check kicks in
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import requests; r=requests.get('http://localhost:8068/'); exit(0 if r.ok else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 120s

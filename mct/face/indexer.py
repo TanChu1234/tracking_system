@@ -1,17 +1,8 @@
 """
-FAISS indexer for face embeddings.
+Face index rebuilding utility.
+Used when the faces directory changes at runtime.
 """
 import numpy as np
-
-import sys
-import os
-sys.path.append(os.path.join(os.getcwd(), 'API_Face'))
-
-try:
-    from API_Face.service.processing import build_targets
-    FACE_API_AVAILABLE = True
-except ImportError:
-    FACE_API_AVAILABLE = False
 
 
 def rebuild_face_index(detector, recognizer, faces_dir):
@@ -25,20 +16,15 @@ def rebuild_face_index(detector, recognizer, faces_dir):
         faces_dir: Path to faces directory
     
     Returns:
-        tuple: (face_targets, face_index, face_id_to_name)
-            - face_targets: List of (embedding, name) tuples
-            - face_index: New FAISS index
-            - face_id_to_name: New ID mapping
+        face_targets: List of (embedding, name) tuples
+        face_index: New FAISS index
+        face_id_to_name: New ID mapping
     """
     import faiss
+    from API_Face.service.processing import build_targets
     
     print("🔄 Rebuilding face targets and FAISS index...")
     
-    if not FACE_API_AVAILABLE:
-        print("⚠️ Face API not available")
-        return [], None, {}
-    
-    # Rebuild targets
     face_targets = build_targets(detector, recognizer, faces_dir)
     print(f"   ✅ Loaded {len(face_targets)} known faces")
     
@@ -46,7 +32,6 @@ def rebuild_face_index(detector, recognizer, faces_dir):
         print("   ⚠️ No faces loaded")
         return face_targets, None, {}
     
-    # Extract embeddings and names
     embeddings = []
     face_id_to_name = {}
     
@@ -54,11 +39,9 @@ def rebuild_face_index(detector, recognizer, faces_dir):
         embeddings.append(embedding)
         face_id_to_name[idx] = name
     
-    # Stack and normalize
     embeddings_np = np.vstack(embeddings)
     faiss.normalize_L2(embeddings_np)
     
-    # Create new FAISS index
     embedding_dim = embeddings_np.shape[1]
     face_index = faiss.IndexFlatIP(embedding_dim)
     face_index.add(embeddings_np)

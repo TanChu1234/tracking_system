@@ -1,0 +1,49 @@
+# ── Git ──
+.git
+.gitignore
+
+# ── Python cache ──
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+*.eggs
+.mypy_cache
+.pytest_cache
+
+# ── IDE / Editor ──
+.vscode
+.idea
+.gemini
+*.swp
+*.swo
+
+# ── Logs & temp ──
+logs/
+*.log
+*.tmp
+*.bak
+
+# ── Docker ──
+Dockerfile
+dockerfile
+docker-compose*.yml
+.dockerignore
+
+# ── Documentation ──
+docs/
+*.md
+*.drawio
+figs/
+
+# ── Training scripts (not needed at runtime) ──
+train.py
+test.py
+dist_train.sh
+
+# ── Large model weights ──
+# INCLUDED by default (weights/, API_Face/weights/, yolo*.pt)
+# Uncomment below if mounting as volumes instead:
+# weights/
+# API_Face/weights/
+# yolo*.pt

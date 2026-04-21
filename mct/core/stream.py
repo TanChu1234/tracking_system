@@ -1,24 +1,15 @@
 """
-Threaded video stream handler for MCT.
+Threaded RTSP stream reader for MCT system.
 """
 import cv2
-import threading
 import time
+import threading
 
 
 class ThreadedStream:
-    """
-    Thread-safe video stream handler.
-    Runs frame capture in background thread for non-blocking reads.
-    """
+    """Thread-safe RTSP/video stream reader."""
     
     def __init__(self, src):
-        """
-        Initialize threaded stream.
-        
-        Args:
-            src: Video source (RTSP URL, file path, or camera index)
-        """
         self.capture = cv2.VideoCapture(src)
         self.lock = threading.Lock()
         self.frame = None
@@ -28,16 +19,15 @@ class ThreadedStream:
         # Check if opened
         if self.capture.isOpened():
             self.status = True
-            # Read first frame
             self.status, self.frame = self.capture.read()
         
-        # Start background thread
+        # Start reader thread
         self.thread = threading.Thread(target=self.update, args=())
         self.thread.daemon = True
         self.thread.start()
 
     def update(self):
-        """Background thread to continuously read frames."""
+        """Continuously read frames in background thread."""
         while not self.stopped:
             if self.capture.isOpened():
                 status, frame = self.capture.read()
@@ -50,12 +40,7 @@ class ThreadedStream:
                 time.sleep(0.1)
 
     def read(self):
-        """
-        Read the latest frame.
-        
-        Returns:
-            tuple: (status, frame)
-        """
+        """Return the latest frame (thread-safe)."""
         with self.lock:
             return self.status, self.frame if self.frame is not None else None
 

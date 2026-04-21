@@ -51,7 +51,7 @@ class MCTTracker:
     """
     
     # Database connection parameters (same as db_config.py)
-    DEFAULT_HOST = "192.168.210.250"
+    DEFAULT_HOST = "10.29.8.49"
     DEFAULT_PORT = 5432
     DEFAULT_USER = "infiniq_user"
     DEFAULT_PASSWORD = "infiniq_pass"
@@ -60,8 +60,17 @@ class MCTTracker:
     # Sampling interval for position tracking (seconds)
     POSITION_SAMPLE_INTERVAL = 10.0
     
-    # Batch size for inserts (reduced for faster face recognition logging)
-    BATCH_SIZE = 10
+    # Minimum spatial movement to trigger logging (in mm, e.g., 1000.0 = 1 meter)
+    MIN_MOVEMENT_DISTANCE = 1000.0
+    
+    # Sampling interval for desk presence checking (seconds)
+    DESK_PRESENCE_INTERVAL = 60.0
+    
+    # Batch size for inserts — increased to 50 for database optimization
+    BATCH_SIZE = 50
+    
+    # Periodic flush interval (seconds) — backup safety flush
+    FLUSH_INTERVAL = 30.0
     
     def __init__(self):
         self.session_id: Optional[str] = None
@@ -70,10 +79,16 @@ class MCTTracker:
         
         # Position sampling: track_id -> last_save_time
         self._last_position_time: Dict[int, float] = {}
+        # Spatial sampling: track_id -> (last_saved_x, last_saved_y)
+        self._last_position_coords: Dict[int, Tuple[float, float]] = {}
+        
+        # Desk presence sampling: last check time
+        self._last_desk_presence_time: float = 0
         
         # Batch buffers
         self._position_buffer: List[dict] = []
         self._face_buffer: List[dict] = []
+        self._desk_buffer: List[dict] = []
         
         # Stats
         self.total_tracks = 0
@@ -81,6 +96,22 @@ class MCTTracker:
         self._known_tracks: set = set()
         self._identified_tracks: set = set()
         
+        # Start background flush thread
+        self._stop_flush = threading.Event()
+        self._flush_thread = threading.Thread(target=self._periodic_flush, daemon=True)
+        self._flush_thread.start()
+        
+    def _periodic_flush(self):
+        """Background thread: flush buffers every FLUSH_INTERVAL seconds"""
+        last_cleanup = time.time()
+        while not self._stop_flush.wait(self.FLUSH_INTERVAL):
+            self._flush_buffers()
+            
+            # Daily cleanup: delete 'unknown' tracking data older than 12 hours once an hour
+            if time.time() - last_cleanup >= 3600:
+                self.cleanup_expired_unknowns(hours_old=12)
+                last_cleanup = time.time()
+
     def _get_connection(self):
         """Get database connection with auto-reconnect"""
         if self.conn is None or self.conn.closed:
@@ -128,6 +159,9 @@ class MCTTracker:
         """End the current tracking session"""
         if not self.session_id:
             return
+        
+        # Stop background flush thread
+        self._stop_flush.set()
         
         # Flush any remaining buffered data
         self._flush_buffers()
@@ -238,10 +272,19 @@ class MCTTracker:
         # Check sampling interval
         last_time = self._last_position_time.get(local_track_id, 0)
         if current_time - last_time < self.POSITION_SAMPLE_INTERVAL:
-            return False  # Skip - not yet 5 seconds
+            return False  # Skip - not yet time
+            
+        # Check spatial movement (Phương án A - Spatial Filtering)
+        last_coords = self._last_position_coords.get(local_track_id)
+        if last_coords:
+            last_x, last_y = last_coords
+            dist = ((x - last_x)**2 + (y - last_y)**2)**0.5
+            if dist < self.MIN_MOVEMENT_DISTANCE:
+                return False  # Skip - moved less than threshold (e.g. 1 meter)
         
-        # Update last save time
+        # Update last save states
         self._last_position_time[local_track_id] = current_time
+        self._last_position_coords[local_track_id] = (x, y)
         
         # Prepare record
         record = {
@@ -314,11 +357,83 @@ class MCTTracker:
         except Exception as e:
             print(f"⚠️ Failed to flush position buffer: {e}")
     
+    def save_desk_presence(self,
+                           roi_id: int,
+                           roi_owner: str,
+                           floor: str,
+                           is_present: bool) -> bool:
+        """
+        Save desk presence record.
+        
+        Args:
+            roi_id: ROI ID from rois table
+            roi_owner: Employee ID assigned to this desk (ROI name)
+            floor: Floor name (e.g., '3F')
+            is_present: True if someone is at the desk
+            
+        Returns:
+            bool: True if saved
+        """
+        if not self.session_id:
+            return False
+        
+        record = {
+            'session_id': self.session_id,
+            'roi_id': roi_id,
+            'roi_owner': roi_owner,
+            'floor': floor,
+            'is_present': is_present,
+            'checked_at': self._get_vn_time()
+        }
+        
+        with self._lock:
+            self._desk_buffer.append(record)
+            
+            if len(self._desk_buffer) >= self.BATCH_SIZE:
+                self._flush_desk_buffer()
+        
+        return True
+    
+    def should_check_desk_presence(self) -> bool:
+        """
+        Check if enough time has passed for desk presence sampling (60s).
+        Returns True if should check, and updates the timer.
+        """
+        current_time = time.time()
+        if current_time - self._last_desk_presence_time >= self.DESK_PRESENCE_INTERVAL:
+            self._last_desk_presence_time = current_time
+            return True
+        return False
+    
+    def _flush_desk_buffer(self):
+        """Flush desk presence buffer to database"""
+        if not self._desk_buffer:
+            return
+        
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            execute_batch(cursor, """
+                INSERT INTO mct_desk_presence 
+                (session_id, roi_id, roi_owner, floor, is_present, checked_at)
+                VALUES (%(session_id)s, %(roi_id)s, %(roi_owner)s, %(floor)s,
+                        %(is_present)s, %(checked_at)s)
+            """, self._desk_buffer)
+            
+            count = len(self._desk_buffer)
+            self._desk_buffer.clear()
+            # print(f"💾 Flushed {count} desk presence records")
+            
+        except Exception as e:
+            print(f"⚠️ Failed to flush desk presence buffer: {e}")
+    
     def _flush_buffers(self):
         """Flush all buffers"""
         with self._lock:
             self._flush_face_buffer()
             self._flush_position_buffer()
+            self._flush_desk_buffer()
     
     def update_track_usr_id(self, local_track_id: int, usr_id: str):
         """
@@ -351,6 +466,28 @@ class MCTTracker:
         except Exception as e:
             print(f"⚠️ Failed to update track usr_id: {e}")
 
+    def cleanup_expired_unknowns(self, hours_old: int = 12):
+        """
+        Delete 'unknown' position tracking records that are older than X hours.
+        This keeps the database clean of unassigned tracking data from past periods.
+        """
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            # Delete records older than 'hours_old' that are still unknown
+            cursor.execute("""
+                DELETE FROM mct_position_tracking 
+                WHERE usr_id = 'unknown' 
+                  AND tracked_at < (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh' - INTERVAL '%s hours')
+            """, (hours_old,))
+            
+            deleted = cursor.rowcount
+            if deleted > 0:
+                print(f"🧹 Cleaned up {deleted} expired 'unknown' position records (older than {hours_old}h)")
+                
+        except Exception as e:
+            print(f"⚠️ Failed to cleanup expired unknowns: {e}")
 
 # Singleton instance for easy import
 _tracker_instance: Optional[MCTTracker] = None
